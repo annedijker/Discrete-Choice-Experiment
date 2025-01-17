@@ -1,0 +1,11 @@
+I wrote this code for my thesis project at the National Health Care Institute (ZIN) with the title: "Towards Socially Acceptable Drug Prices in the Netherlands, 
+a Discrete Choice Experiments among Dutch Policymakers". 
+
+The Discrete Choice Experiment (DCE) consisted of 20 hypothetical choice tasks in which respondents had to state their preference for the 
+reimbursement of two alternatives (Drug A or Drug B), characterized by five attributes (i.e. cost-effectiveness, uncertainty of cost-effectiveness, 
+age, macro cost assessment and unmet medical need). 
+
+An experimental design matrix was generated, varying the attribute levels between the alternatives to determine the relative contribution of the 
+attribute levels to respondent's preferences. 
+
+Mixed Logit Regression models were performed and estimated coefficients were obtained, which reflect the preference differences across respondents.
