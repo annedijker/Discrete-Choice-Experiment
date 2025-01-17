@@ -1,0 +1,281 @@
+/*******************************************************************************************
+Analysis Choice predictions 
+	Input: ShapedSurveyData.csv
+*******************************************************************************************/
+
+version 14
+clear all
+capture log close
+set more off
+
+*** 1. Create log file called 'CHOICEPRED.log' in the map 'Logfiles'
+	*This file logs the results from the analyses 
+
+	log using "/Users/annedijker/Desktop/DCE_final/Output/Logfiles/CHOICEPRED.log", text replace	
+
+*** 2. Prepare analysis
+
+	set seed 1234
+
+*** 2. Import shaped dataset 
+
+	import delimited "/Users/annedijker/Desktop/DCE_final/Export_Qualtrics/ShapedSurveyData.csv", case(preserve) encoding(UTF-8) clear
+
+*** 3. Perform the best fitting regression model from 'Analysis.do' 
+
+	*---------------------------------------------------------------*
+	*	9. MIXED LOGIT (UMN + UNCERTAINTY + AGE fixed)				*						
+	*---------------------------------------------------------------*
+	
+		*Create linear terms for the linear variables
+			*ICER_lin
+			gen 		ICER_lin =0
+			recode		ICER_lin (0=60) if ICER_60 ==1
+			recode		ICER_lin (0=120) if ICER_120 ==1	
+			
+		*Create macro variable that includes the independent variables
+		global xvar_three_fix "ICER_lin COST_20 COST_80"
+		
+		*MIXL Linear
+		mixlogit Y ASC UNCERTAINTY_moderate UNCERTAINTY_severe AGE_adult AGE_elderly UMN_moderate UMN_low, rand($xvar_three_fix) group(group) id(id) nrep(1000) burn(19) cluster(id) 
+		
+*** 4. Choice predictions / Marginal effects
+	*Estimated coefficients (preference weights) indicate the relative contribution of an attribute level to the overall utility.
+	*Relative contribution, meaning the difference in preference weight compared to their respective reference category (the most preferred attribute level).
+	*However, the estimated coefficients only say something about the relative contribution of levels WITHIN an attribute.
+	*In order to compare BETWEEN attributes, we thus need a different scale = Marginal effects.
+	
+	*Marginal effects (ME) (%)
+		*Indicate the changes in choice probability.
+		*You compare the predicted choice probabilities of choosing a certain alternative under different scenarios of every attribute.
+		*Different scenarios of every attribute
+			*Scenario 1 = Keep all the other attributes equal and only change for one attribute from level 1 (reference category) to level 2
+			*SCenario 2 = Keep all the other attributes equal and only change for one attribute from level 1 (reference category) to level 3
+		*Repeat this for every attribute.
+		
+	*---------------------------------------------------*
+	*	ICER - linear, so a change of €1.000			*		
+	*---------------------------------------------------* 	
+	*For the linear variable you add a scenario 3 for a linear €1.000 change.
+	
+	*Scenario 1 = 20 vs 60 
+	preserve 
+	
+		replace ICER_lin = 20 if alternative ==1 		
+		mixlpred pred0									// generate predicted choice probability of choosing this alternative and store in 'pred0'
+		
+		replace ICER_lin = 60 if alternative ==1		
+		mixlpred pred1									// generate predicted choice probability of choosing this alternative and store in 'pred1'
+		
+		gen marg1 = pred1-pred0							// calculate marginal effect of changing from 20 to 60
+		sum marg1 if alternative ==1
+
+	restore
+	
+	*Scenario 2 = 20 vs 120
+	preserve
+	
+		replace ICER_lin = 20 if alternative ==1 		
+		mixlpred pred0									// generate predicted choice probability of choosing this alternative and store in 'pred0'
+		
+		replace ICER_lin = 120 if alternative ==1
+		mixlpred pred2									// generate predicted choice probability of choosing this alternative and store in 'pred2'
+
+		gen marg2 = pred2-pred0							// calculate marginal effect of changing from 20 to 120
+		sum marg2 if alternative ==1
+
+	restore 
+
+	*Scenario 3 = 0 vs 1
+	preserve 
+	
+		replace ICER_lin = 0 if alternative ==1 		
+		mixlpred pred0									// generate predicted choice probability of choosing this alternative and store in 'pred0'
+		
+		replace ICER_lin = 1 if alternative ==1		
+		mixlpred pred3									// generate predicted choice probability of choosing this alternative and store in 'pred1'
+		
+		gen marg3 = pred3-pred0							// calculate marginal effect of changing from 0 to 1
+		sum marg3 if alternative ==1
+
+	restore
+	*---------------------------------------------------*
+	*	UNCERTAINTY										*
+	*---------------------------------------------------*
+
+	*Create variable for reference category
+	gen UNCERTAINTY_small = 0
+	recode UNCERTAINTY_small (0=1) if UNCERTAINTY_moderate ==0 & UNCERTAINTY_severe ==0
+
+	*Scenario 1 = small vs moderate 
+	preserve
+
+		replace UNCERTAINTY_small = 1 if alternative ==1
+		replace UNCERTAINTY_moderate = 0 if alternative ==1
+		replace UNCERTAINTY_severe = 0 if alternative ==1
+		mixlpred pred0
+
+		replace UNCERTAINTY_small	= 0 if alternative ==1
+		replace UNCERTAINTY_moderate = 1 if alternative ==1
+		replace UNCERTAINTY_severe = 0 if alternative ==1
+		mixlpred pred1
+
+		gen marg1 = pred1-pred0
+		sum marg1 if alternative ==1
+
+	restore
+
+	*Scenario 2 = small vs severe 
+	preserve
+
+		replace UNCERTAINTY_small = 1 if alternative ==1
+		replace UNCERTAINTY_moderate = 0 if alternative ==1
+		replace UNCERTAINTY_severe = 0 if alternative ==1
+		mixlpred pred0
+
+		replace UNCERTAINTY_small	= 0 if alternative ==1
+		replace UNCERTAINTY_moderate = 0 if alternative ==1
+		replace UNCERTAINTY_severe =1 if alternative ==1
+		mixlpred pred2
+
+		gen marg2 = pred2-pred0
+		sum marg2 if alternative ==1
+
+	restore
+
+	*---------------------------------------------------*
+	*	AGE												*
+	*---------------------------------------------------*
+
+	*Create variable for reference category
+	gen AGE_child = 0
+	recode AGE_child (0=1) if AGE_adult ==0 & AGE_elderly ==0
+
+	*Scenario 1 = child vs adult
+	preserve
+
+		replace AGE_child = 1 if alternative ==1
+		replace AGE_adult = 0 if alternative ==1
+		replace AGE_elderly = 0 if alternative ==1
+		mixlpred pred0
+
+		replace AGE_child = 0 if alternative ==1
+		replace AGE_adult = 1 if alternative ==1
+		replace AGE_elderly = 0 if alternative ==1
+		mixlpred pred1
+
+		gen marg1 = pred1-pred0
+		sum marg1 if alternative ==1
+
+	restore
+
+	*Scenario 2 = child vs elderly 
+	preserve
+
+		replace AGE_child = 1 if alternative ==1
+		replace AGE_adult = 0 if alternative ==1
+		replace AGE_elderly = 0 if alternative ==1
+		mixlpred pred0
+
+		replace AGE_child = 0 if alternative ==1
+		replace AGE_adult = 0 if alternative ==1
+		replace AGE_elderly = 1 if alternative ==1
+		mixlpred pred2
+
+		gen marg2 = pred2-pred0
+		sum marg2 if alternative ==1
+
+	restore
+
+	*---------------------------------------------------*
+	*	COST											*	
+	*---------------------------------------------------*
+
+	*Create variable for reference category
+	gen COST_5 = 0
+	recode COST_5 (0=1) if COST_20 ==0 & COST_80 ==0
+	
+	*Scenario 1 = 5 vs 20 
+	preserve
+
+		replace COST_5 = 1 if alternative ==1
+		replace COST_20 = 0 if alternative ==1
+		replace COST_80 = 0 if alternative ==1
+		mixlpred pred0									 
+		
+		replace COST_5 = 0 if alternative ==1
+		replace COST_20 = 1 if alternative ==1
+		replace COST_80 = 0 if alternative ==1
+		mixlpred pred1									 
+		
+		gen marg1 = pred1-pred0
+		sum marg1 if alternative ==1
+
+	restore
+
+	*Scenario 2 = 5 vs 80 
+	preserve
+
+		replace COST_5 = 1 if alternative ==1
+		replace COST_20 = 0 if alternative ==1
+		replace COST_80 = 0 if alternative ==1
+		mixlpred pred0									 
+		
+		replace COST_5 = 0 if alternative ==1
+		replace COST_20 = 0 if alternative ==1
+		replace COST_80 = 1 if alternative ==1
+		mixlpred pred2									 
+		
+		gen marg2 = pred2-pred0
+		sum marg2 if alternative ==1
+
+	restore
+	
+	*---------------------------------------------------*
+	*	UMN						
+	*---------------------------------------------------*
+
+	*Create variable for reference category
+	gen UMN_high = 0
+	recode UMN_high (0=1) if UMN_moderate ==0 & UMN_low ==0
+
+	*Scenario 1 = high vs moderate
+	preserve
+
+		replace UMN_high = 1 if alternative ==1
+		replace UMN_moderate = 0 if alternative ==1
+		replace UMN_low = 0 if alternative ==1
+		mixlpred pred0
+
+		replace UMN_high = 0 if alternative ==1
+		replace UMN_moderate =1 if alternative ==1
+		replace UMN_low = 0 if alternative ==1
+		mixlpred pred1
+
+		gen marg1 = pred1-pred0
+		sum marg1 if alternative ==1
+
+	restore
+
+	*Scenario 2 = high vs low
+	preserve
+
+		replace UMN_high = 1 if alternative ==1
+		replace UMN_moderate = 0 if alternative ==1			
+		replace UMN_low = 0 if alternative ==1
+		mixlpred pred0
+
+		replace UMN_low = 1 if alternative ==1
+		replace UMN_moderate = 0 if alternative ==1
+		replace UMN_high = 0 if alternative ==1
+		mixlpred pred2
+
+		gen marg2 = pred2-pred0
+		sum marg2 if alternative ==1
+
+	restore
+	
+*** 7. Save and exit 
+	capture log close
+
+	exit
